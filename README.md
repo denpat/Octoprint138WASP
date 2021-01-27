@@ -1,6 +1,12 @@
 #  OctoPrint
+!!!!!!!!!!!!!!!!!
 
-[![GitHub version](https://badge.fury.io/gh/foosel%2FOctoPrint.svg)](https://badge.fury.io/gh/foosel%2FOctoPrint)
+N.B.
+This is the 1.3.8 version of Octoprint modified for working correctly with WASP electronics ad firmware.
+Since WASP firmware is continuous evolution we preferred using our repository instead the official one.  
+
+!!!!!!!!!!!!!!!!!
+
 
 OctoPrint provides a snappy web interface for controlling consumer 3D printers. It is Free Software
 and released under the [GNU Affero General Public License V3](http://www.gnu.org/licenses/agpl.html).
