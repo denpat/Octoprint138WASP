@@ -1,0 +1,66 @@
+<form class="form-horizontal">
+    <div class="control-group">
+        <div class="controls">
+            <label class="checkbox">
+                <input type="checkbox" data-bind="checked: feature_legacyPluginAssets" id="settings-legacyPluginAssets"> {{ _('Enable legacy plugin asset bundling') }} <span class="label label-info">Compatibility</span>
+                <span class="help-block">{% trans url="https://octoprint.org/blog/2017/12/01/heads-up-plugin-authors/" %}
+                    Enable this, save and restart your server if you are running into issues with plugins with OctoPrint
+                    1.3.6 or later that used to work with OctoPrint up to version 1.3.5. See <a href="{{ url }}">here</a>
+                    for details on why this is happening. Note that this legacy flag will be removed in a future
+                    OctoPrint version (currently planned for 1.3.8), so urge the authors of affected plugins to push
+                    an update with a fix.
+                {% endtrans %}</span>
+            </label>
+        </div>
+    </div>
+    <div class="control-group">
+        <div class="controls">
+            <label class="checkbox">
+                <input type="checkbox" data-bind="checked: feature_temperatureGraph" id="settings-featureTemperatureGraph"> {{ _('Enable Temperature Graph') }}
+            </label>
+        </div>
+    </div>
+    <div class="control-group">
+        <div class="controls">
+            <label class="checkbox">
+                <input type="checkbox" data-bind="checked: feature_modelSizeDetection" id="settings-modelSizeDetection"> {{ _('Enable model size detection and warn if model exceeds print bed') }} <span class="label label-info">{{ _('Beta') }}</span>
+            </label>
+        </div>
+    </div>
+    <div class="control-group">
+        <div class="controls">
+            <label class="checkbox">
+                <input type="checkbox" data-bind="checked: feature_printCancelConfirmation" id="settings-printCancelConfirmation"> {{ _('Confirm before cancelling a print') }}
+            </label>
+        </div>
+    </div>
+    <div class="control-group">
+        <div class="controls">
+            <label class="checkbox">
+                <input type="checkbox" data-bind="checked: feature_sdSupport" id="settings-featureSdSupport"> {{ _('Enable SD support') }}
+            </label>
+        </div>
+    </div>
+    <div class="control-group">
+        <div class="controls">
+            <label class="checkbox">
+                <input type="checkbox" data-bind="checked: feature_keyboardControl" id="settings-featureKeyboardControl"> {{ _("Enable Keyboard Control") }}
+            </label>
+        </div>
+    </div>
+    <div class="control-group">
+        <div class="controls">
+            <label class="checkbox">
+                <input type="checkbox" data-bind="checked: feature_g90InfluencesExtruder" id="settings-g90InfluencesExtruder"> {{ _('<code>G90</code>/<code>G91</code> overrides relative extruder mode') }} <span class="label">{{ _('Smoothieware') }}</span>
+                <span class="help-block">{{ _('This is used by the GCODE analysis in the backend and the viewer in the frontend to interpret your sliced files correctly.') }}</span>
+            </label>
+        </div>
+    </div>
+    <div class="control-group" title="{{ _('Commands to not completely auto uppercase in the terminal tab') }}">
+        <label class="control-label" for="settings-featureAutoUppercaseBlacklist">{{ _('Terminal Auto Uppercase Blacklist') }}</label>
+        <div class="controls">
+            <input type="text" class="input-block-level" id="settings-featureAutoUppercaseBlacklist" data-bind="value: feature_autoUppercaseBlacklist">
+            <span class="help-block">{{ _('Use this to specify the commands that should not have their parameters automatically uppercased in the terminal tab. Just the G or M code, comma separated.') }}</span>
+        </div>
+    </div>
+</form>
