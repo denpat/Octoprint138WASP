@@ -66,9 +66,12 @@ class Printer(PrinterInterface, comm.MachineComPrintCallback):
 		self._state = None
 
 		self._currentZ = None
+		self._currentX = None
+		self._currentY = None
 
 		self._printAfterSelect = False
 		self._posAfterSelect = None
+
 
 		# sd handling
 		self._sdPrinting = False
@@ -577,6 +580,57 @@ class Printer(PrinterInterface, comm.MachineComPrintCallback):
 				"offset": offsets["bed"] if "bed" in offsets and offsets["bed"] is not None else 0
 			}
 
+		if self._comm.last_position is not None:
+			#self._logger.info("...mando position in output")
+			result["position"] = {
+				"x": self._comm.last_position.x,
+				"y": self._comm.last_position.y,
+				"z": self._comm.last_position.z,
+			}
+		if self._comm.DoorIsOpen is not False:
+			result["door"] = {"status":"OPEN"}
+		else:
+			result["door"] = {"status":"CLOSED"}
+		if self._comm.M600LOOP is not False:
+			result["LOOP"] = {"value":"true"}
+		else:
+			result["LOOP"] = {"value":"false"}
+		if self._comm.M117Message is not None:
+			result["msg"] = {"msg":self._comm.M117Message}
+			#self._comm.M117Message = ""
+		if self._comm.chamberSet is not None:
+			result["chamber"] = {"set":self._comm.chamberSet}
+		if self._comm.LastGcode is not None:
+			result["resurrection"] = {"gcode":self._comm.LastGcode}
+
+		if self._comm.Changefilament is not False:
+			result["filamentChange"] ={"status":True}
+		else:
+			result["filamentChange"] ={"status":False}
+
+		if self._comm.OffsetEX0 is not None:
+			result["Offset0"] = {"line" : self._comm.OffsetEX0}
+
+		if self._comm.OffsetEX1 is not None:
+			result["Offset1"] = {"line" : self._comm.OffsetEX1}
+
+		if self._comm.AUTOCALIB is not None:
+			result["Autocalib"] = {"Status" : self._comm.AUTOCALIB}
+		
+		if self._comm.PID is not None:
+			result["PID"] = {"line" : self._comm.PID}
+		if self._comm.StepsXmm is not None:
+			result["StepsXmm"] = {"line" : self._comm.StepsXmm}
+		if self._comm.Acceleration is not None:
+			result["Acceleration"] = {"line" : self._comm.Acceleration}
+
+
+		if self._comm.PID is not None:
+                        result["PID"] = {"line" : self._comm.PID}
+		if self._comm.DeltaSettings is not None:
+                        result["DeltaSet"] = {"line" : self._comm.DeltaSettings}
+		if self._comm.Endstop is not None:
+                        result["Endstop"] = {"line" : self._comm.Endstop}
 		return result
 
 	def get_temperature_history(self, *args, **kwargs):
@@ -610,6 +664,9 @@ class Printer(PrinterInterface, comm.MachineComPrintCallback):
 
 	def is_error(self, *args, **kwargs):
 		return self._comm is not None and self._comm.isError()
+
+	def is_changefilament(self, *args, **kwargs):
+                return self._comm is not None and self._comm.isChangeFilament()
 
 	def is_ready(self, *args, **kwargs):
 		return self.is_operational() and not self.is_printing() and not self._comm.isStreaming()
@@ -749,6 +806,7 @@ class Printer(PrinterInterface, comm.MachineComPrintCallback):
 		with self._selectedFileMutex:
 			if self._selectedFile and "estimatedPrintTime" in self._selectedFile \
 					and self._selectedFile["estimatedPrintTime"]:
+
 				statisticalTotalPrintTime = self._selectedFile["estimatedPrintTime"]
 				statisticalTotalPrintTimeType = self._selectedFile.get("estimatedPrintTimeType", None)
 

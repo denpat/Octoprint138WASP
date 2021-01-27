@@ -386,6 +386,10 @@ class MachineCom(object):
 	STATE_TRANSFERING_FILE = 11
 	STATE_CANCELLING = 12
 	STATE_PAUSING = 13
+	STATE_STOPANDSAVE = 90
+	STATE_STOPANDSAVE_HW = 93
+	STATE_AUTOCALIBRATION = 91
+	STATE_CHANGEFILAMENT = 99
 
 	CAPABILITY_AUTOREPORT_TEMP = "AUTOREPORT_TEMP"
 	CAPABILITY_AUTOREPORT_SD_STATUS = "AUTOREPORT_SD_STATUS"
@@ -410,6 +414,21 @@ class MachineCom(object):
 				baudrate = settingsBaudrate
 		if callbackObject == None:
 			callbackObject = MachineComPrintCallback()
+		
+		self.Changefilament = False
+       	 	self.DoorIsOpen = False
+		self.M600LOOP = False
+		self.M117Message = ""
+		self.chamberSet = ""
+		self.LastGcode = ""
+		self.AUTOCALIB = ""
+        	self.OffsetEX0 = ""
+	        self.OffsetEX1 = ""
+		self.PID = ""
+		self.DeltaSettings = ""
+		self.Endstop = ""
+		self.StepsXmm = ""
+		self.Acceleration = ""
 
 		self._port = port
 		self._baudrate = baudrate
@@ -499,6 +518,7 @@ class MachineCom(object):
 		self._resend_ok_timer = None
 
 		self._resendActive = False
+
 
 		self._terminal_log = deque([], 20)
 
@@ -598,7 +618,6 @@ class MachineCom(object):
 	def _changeState(self, newState):
 		if self._state == newState:
 			return
-
 		if newState == self.STATE_CLOSED or newState == self.STATE_CLOSED_WITH_ERROR:
 			if settings().getBoolean(["feature", "sdSupport"]):
 				self._sdFileList = False
@@ -612,7 +631,6 @@ class MachineCom(object):
 
 		oldState = self.getStateString()
 		self._state = newState
-
 		text = "Changing monitoring state from \"{}\" to \"{}\"".format(oldState, self.getStateString())
 		self._log(text)
 		self._logger.info(text)
@@ -681,6 +699,14 @@ class MachineCom(object):
 			return "Pausing"
 		elif state == self.STATE_PAUSED:
 			return "Paused"
+		elif state == self.STATE_CHANGEFILAMENT:
+			return "Change Filament"
+		elif state == self.STATE_STOPANDSAVE:
+			return "Stop and save"
+		elif state == self.STATE_STOPANDSAVE_HW:
+			return "Shutdown"
+		elif state == self.STATE_AUTOCALIBRATION:
+			return "Autocalibration"
 		elif state == self.STATE_CLOSED:
 			return "Offline"
 		elif state == self.STATE_ERROR:
@@ -702,7 +728,7 @@ class MachineCom(object):
 
 	def isOperational(self):
 		return self._state in (self.STATE_OPERATIONAL, self.STATE_PRINTING, self.STATE_CANCELLING, self.STATE_PAUSING,
-		                       self.STATE_PAUSED, self.STATE_TRANSFERING_FILE)
+		                       self.STATE_CHANGEFILAMENT, self.STATE_AUTOCALIBRATION, self.STATE_STOPANDSAVE, self.STATE_STOPANDSAVE_HW, self.STATE_PAUSED, self.STATE_TRANSFERING_FILE)
 
 	def isPrinting(self):
 		return self._state in (self.STATE_PRINTING, self.STATE_CANCELLING, self.STATE_PAUSING)
@@ -724,6 +750,8 @@ class MachineCom(object):
 
 	def isPaused(self):
 		return self._state == self.STATE_PAUSED
+	def isChangefilament(self):
+		return self_state == self.STATE_CHANGEFILAMENT
 
 	def isBusy(self):
 		return self.isPrinting() or self.isPaused() or self._state in (self.STATE_CANCELLING, self.STATE_PAUSING)
@@ -1237,11 +1265,12 @@ class MachineCom(object):
 				# now make sure we actually do something, up until now we only filled up the queue
 				self._sendFromQueue()
 
-			elif pause and self.isPrinting():
+			elif pause and self.isPrinting() :
 				if not self._pauseWaitStartTime:
 					self._pauseWaitStartTime = time.time()
 
 				self._changeState(self.STATE_PAUSING)
+				
 				if self.isSdFileSelected():
 					self.sendCommand("M25", tags=tags | {"trigger:comm.set_pause", "trigger:pause"}) # pause print
 
@@ -1401,7 +1430,6 @@ class MachineCom(object):
 		disable_external_heatup_detection = not settings().getBoolean(["serial", "externalHeatupDetection"])
 
 		self._consecutive_timeouts = 0
-
 		#Open the serial port.
 		if not self._openSerial():
 			return
@@ -1444,12 +1472,51 @@ class MachineCom(object):
 
 					if self._dwelling_until and now > self._dwelling_until:
 						self._dwelling_until = False
+				if line.startswith("echo: M218 T0"):
+						self.OffsetEX0 = line.strip()[14:]
+				if line.startswith("echo: M218 T1"):
+						self.OffsetEX1 = line.strip()[14:]
+				if line.startswith("AUTOCALIB "):
+						self.AUTOCALIB = line.strip()
+						self._logger.info(line.strip())
+				if line.startswith("echo: DOOR OPEN"):
+						self.DoorIsOpen = True
+				if line.startswith("echo: DOOR CLOSED"):
+						self.DoorIsOpen = False
+				if line.startswith("M600 ENDEXTRACTION"):
+						self.M600LOOP = True
+				if line.startswith("M600 STARTINSERCTION"):
+						self.M600LOOP = False
+				if line.startswith("CHAMBER SET:"):
+						self.chamberSet =  line.strip()[12:]
+				if line.startswith("message: "):
+						self.M117Message = line.strip()[9:]
+						if self.M117Message == "CLR":
+							self.M117Message = ""
+				if line.startswith("LASTCOMMAND: "):
+						self.LastGcode = line.strip()[12:]
+				if line.startswith("echo: M666"):
+						self.Endstop = line.strip()[11:]
+				if line.startswith("echo: M665"):
+						self.DeltaSettings = line.strip()[11:]
+				if line.startswith("echo: M301"):
+						self.PID = line.strip()[12:]
+				if line.startswith("echo: M204 "):
+						self.Acceleration = line.strip()[11:]
+				if line.startswith("echo: M92 "):
+						self.StepsXmm = line.strip()[10:]
+
 
 				##~~ busy protocol handling
 				if line.startswith("echo:busy:") or line.startswith("busy:"):
 					# reset the ok timeout, the regular comm timeout has already been reset
 					self._ok_timeout = get_new_timeout("communicationBusy" if self._busy_protocol_detected else "communication", self._timeout_intervals)
-
+					if line.startswith("echo: DOOR OPEN"):
+						self._logger.info("porta aperta")
+						self.DoorIsOpen = True
+					if line.startswith("echo: DOOR CLOSED"):
+						self._logger.info("porta chiusa")
+						self.DoorIsOpen = False
 					# make sure the printer sends busy in a small enough interval to match our timeout
 					if not self._busy_protocol_detected and self._capability_support.get(self.CAPABILITY_BUSY_PROTOCOL,
 					                                                                     False):
@@ -1590,11 +1657,12 @@ class MachineCom(object):
 						# there's no way to query it from the firmware and
 						# no way to track it ourselves when not streaming
 						# the file - this all sucks sooo much
+						self._logger.info("last position found")
 						self.last_position.valid = True
 						self.last_position.x = parsed.get("x")
 						self.last_position.y = parsed.get("y")
 						self.last_position.z = parsed.get("z")
-
+						#self.DoorIsOpen = False
 						if "e" in parsed:
 							self.last_position.e = parsed.get("e")
 						else:
@@ -1628,7 +1696,7 @@ class MachineCom(object):
 				##~~ temperature processing
 				elif ' T:' in line or line.startswith('T:') or ' T0:' in line or line.startswith('T0:') \
 						or ((' B:' in line or line.startswith('B:')) and not 'A:' in line):
-
+					#self.DoorIsOpen = False
 					if not disable_external_heatup_detection and not self._temperature_autoreporting \
 							and not line.strip().startswith("ok") and not self._heating \
 							and self._firmware_info_received:
@@ -1638,7 +1706,35 @@ class MachineCom(object):
 
 					self._processTemperatures(line)
 					self._callback.on_comm_temperature_update(self.last_temperature.tools, self.last_temperature.bed)
-
+				elif line.startswith("echo: filamentchange"):
+					if (self.Changefilament == False):
+						if (self._state == self.STATE_PRINTING):
+							#self.sendCommand('G91')
+							#self.sendCommand('G1 Z10')
+							#self.sendCommand('G90')
+							self._changeState(self.STATE_PAUSED)
+							self.Changefilament = True
+							self._logger.info(self.Changefilament)
+						self._logger.info("filament change detected")
+				elif line.startswith("echo: filament reset"):
+					if (self.Changefilament == True):
+						self.Changefilament = False
+				elif line.startswith("echo: resurrecting"):
+					self._logger.info(line)
+				elif line.startswith("echo: stopandsave"):
+					self._logger.info("stop and save detected")
+					self._changeState(self.STATE_STOPANDSAVE)
+				elif line.startswith("STOP"):
+					if line.strip()[4:] is not None:
+						self.LastGcode=line.strip()[4:]
+					self._logger.info("emergency stop detected")
+					self._changeState(self.STATE_STOPANDSAVE_HW)
+				elif line.startswith("echo: START autocalib"):
+                                        self._logger.info("start autocalibration detected")
+                                        self._changeState(self.STATE_AUTOCALIBRATION)
+ 				elif line.startswith("echo: END autocalib"):
+                                        self._logger.info("end autocalibration detected")
+                                        self._changeState(self.STATE_OPERATIONAL)
 				elif supportRepetierTargetTemp and ('TargetExtr' in line or 'TargetBed' in line):
 					matchExtr = regex_repetierTempExtr.match(line)
 					matchBed = regex_repetierTempBed.match(line)
@@ -1849,6 +1945,7 @@ class MachineCom(object):
 					# buggy Marlin version that doesn't send a proper line break after the "File deleted" statement, fixed in
 					# current versions
 					self._handle_ok()
+				
 
 				##~~ Message handling
 				self._callback.on_comm_message(line)
@@ -1920,6 +2017,7 @@ class MachineCom(object):
 				elif self._state in (self.STATE_OPERATIONAL,
 				                     self.STATE_PRINTING,
 				                     self.STATE_PAUSED,
+						     self.STATE_CHANGEFILAMENT,
 				                     self.STATE_TRANSFERING_FILE):
 					if line == "start": # exact match, to be on the safe side
 						if self._state in (self.STATE_OPERATIONAL,):
@@ -1968,7 +2066,7 @@ class MachineCom(object):
 
 		self._finish_heatup()
 
-		if not self._state in (self.STATE_PRINTING, self.STATE_OPERATIONAL, self.STATE_PAUSED, self.STATE_CANCELLING, self.STATE_PAUSING):
+		if not self._state in (self.STATE_PRINTING, self.STATE_OPERATIONAL, self.STATE_PAUSED, self.STATE_CANCELLING, self.STATE_PAUSING, self.STATE_CHANGEFILAMENT):
 			return
 
 		# process queues ongoing resend requests and queues if we are operational
@@ -1984,6 +2082,7 @@ class MachineCom(object):
 	def _handle_timeout(self):
 		if self._state not in (self.STATE_PRINTING,
 		                       self.STATE_PAUSED,
+				       self.STATE_CHANGEFILAMENT,
 		                       self.STATE_OPERATIONAL):
 			return
 
@@ -2026,6 +2125,7 @@ class MachineCom(object):
 
 		elif self._long_running_command:
 			# long running command active, ignore timeout
+
 			self._logger.debug("Ran into a communication timeout, but a command known to be a long runner is currently active")
 
 		elif self._state in (self.STATE_PRINTING, self.STATE_PAUSED):
